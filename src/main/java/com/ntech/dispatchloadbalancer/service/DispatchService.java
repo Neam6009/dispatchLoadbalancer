@@ -8,7 +8,11 @@ import lombok.extern.java.Log;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import javax.swing.text.html.Option;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -24,13 +28,13 @@ public class DispatchService {
         this.vehicleService = vehicleService;
     }
 
-    double haversine(double val){
+    Double haversine(Double val){
         return Math.pow(Math.sin(val/2),2);
     }
 
-    private double getDistance(double startLat, double startLong, double endLat, double endLong){
-        double latDistance = Math.toRadians((endLat - startLat));
-        double longDistance = Math.toRadians((endLong - startLong));
+    private Double getDistance(Double startLat, Double startLong, Double endLat, Double endLong){
+        Double latDistance = Math.toRadians((endLat - startLat));
+        Double longDistance = Math.toRadians((endLong - startLong));
 
         double startLatRad = Math.toRadians(startLat);
         double endLatRad = Math.toRadians(endLat);
@@ -44,37 +48,37 @@ public class DispatchService {
     public List<DispatchPlan> getDispatchPlan() {
         List<Order> orders = orderService.getAllOrders();
         List<Vehicle> vehicles = vehicleService.getAllVehicles();
-        orders.sort(Comparator.comparing(Order::getPriority));
-        HashMap<String,DispatchPlan> vehicleIdMap = new HashMap<>();
-        orders.forEach(order -> {
-            double minDistance = Double.MAX_VALUE;
-            Vehicle minVehicle = new Vehicle();
-            for(Vehicle vehicle : vehicles){
-                if(vehicle.getCapacity() > order.getPackageWeight()){
-                    double currDistance = getDistance(vehicle.getCurrentLatitude(),vehicle.getCurrentLongitude(),
-                            order.getLatitude(),order.getLongitude());
-                    if( currDistance < minDistance){
-                        minDistance = currDistance;
-                        minVehicle = vehicle;
-                    }
-                }
-            }
-            Vehicle newVehicle = new Vehicle(minVehicle.getVehicleId(),minVehicle.getCapacity()-order.getPackageWeight(),
-                    minVehicle.getCurrentLatitude(),minVehicle.getCurrentLongitude(),minVehicle.getCurrentAddress());
-            if(minDistance !=  Double.MAX_VALUE){
-                vehicles.set(vehicles.indexOf(minVehicle), newVehicle);
-            DispatchPlan mapVal = vehicleIdMap.getOrDefault(minVehicle.getVehicleId(),
-                    new DispatchPlan(new DispatchVehicle(minVehicle.getVehicleId(),0,0),new ArrayList<>()));
-            double newTotalDistance = mapVal.getVehicle().getTotalDistance() + minDistance;
-            int newTotalLoad = mapVal.getVehicle().getTotalLoad() + order.getPackageWeight();
-            mapVal.getVehicle().setTotalDistance(newTotalDistance);
-            mapVal.getVehicle().setTotalLoad(newTotalLoad);
-            mapVal.getAssignedOrders().add(order);
-            vehicleIdMap.put(minVehicle.getVehicleId(),mapVal);
-            }
+        orders.sort(Comparator.comparing(Order::getPriority).reversed());
+        Map<String,Vehicle> vehicleStateMap = vehicles.stream().collect(Collectors.toConcurrentMap(Vehicle::getVehicleId, vehicle->vehicle));
+        HashMap<String,DispatchPlan> dispatchPlanMap = new HashMap<>();
 
+        orders.forEach(order -> {
+            Optional<Vehicle> vehicle_with_minimum_distance = vehicleStateMap.values().parallelStream()
+                    .filter(vehicle -> vehicle.getCapacity() >= order.getPackageWeight())
+                    .min(Comparator.comparingDouble(vehicle ->
+                            getDistance(vehicle.getCurrentLatitude(),vehicle.getCurrentLongitude(),
+                                    order.getLatitude(),order.getLongitude())));
+
+            if(vehicle_with_minimum_distance.isPresent()){
+                Vehicle carrierVehicle = vehicle_with_minimum_distance.get();
+                double minimumDistance = getDistance(carrierVehicle.getCurrentLatitude(),
+                        carrierVehicle.getCurrentLongitude(),order.getLatitude(),order.getLongitude());
+                //update the values for the vehicle with the minimum distance
+                carrierVehicle.setCapacity(carrierVehicle.getCapacity()-order.getPackageWeight());
+                carrierVehicle.setCurrentLatitude(order.getLatitude());
+                carrierVehicle.setCurrentLongitude(order.getLongitude());
+                carrierVehicle.setCurrentAddress(order.getAddress());
+                //add or update the order and vehicle to the plan
+                DispatchPlan plan = dispatchPlanMap.computeIfAbsent(carrierVehicle.getVehicleId(),
+                        vehicleId -> new DispatchPlan(new DispatchVehicle(vehicleId,0.0,0.0),new ArrayList<>()));
+                plan.getAssignedOrders().add(order);
+                DispatchVehicle dispatchVehicle = plan.getVehicle();
+                dispatchVehicle.setTotalDistance(dispatchVehicle.getTotalDistance()+minimumDistance);
+                dispatchVehicle.setTotalLoad(dispatchVehicle.getTotalLoad() + order.getPackageWeight());
+            }
         });
-        return vehicleIdMap.values().stream().toList();
+
+        return new ArrayList<>(dispatchPlanMap.values());
     }
 
 }

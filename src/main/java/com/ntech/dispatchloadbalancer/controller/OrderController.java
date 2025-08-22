@@ -2,8 +2,10 @@ package com.ntech.dispatchloadbalancer.controller;
 
 import com.ntech.dispatchloadbalancer.model.Order;
 import com.ntech.dispatchloadbalancer.model.Status;
+import com.ntech.dispatchloadbalancer.model.dto.OrderRequestList;
 import com.ntech.dispatchloadbalancer.model.dto.PostResponse;
 import com.ntech.dispatchloadbalancer.service.OrderService;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -16,7 +18,7 @@ import java.util.List;
 @RequestMapping("/api/dispatch/orders")
 public class OrderController {
 
-    private OrderService orderService;
+    private final OrderService orderService;
 
     @Autowired
     public OrderController(OrderService orderService){
@@ -24,8 +26,8 @@ public class OrderController {
     }
 
     @PostMapping
-    public PostResponse addOrders(@RequestBody List<Order> orders){
-        orderService.addOrders(orders);
+    public PostResponse addOrders(@Valid @RequestBody OrderRequestList orderRequestList){
+        orderService.addOrders(orderRequestList.getOrders());
         return new PostResponse("Delivery orders accepted.", Status.success);
     }
 }

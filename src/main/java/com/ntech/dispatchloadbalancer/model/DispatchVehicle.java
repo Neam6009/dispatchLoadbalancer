@@ -7,6 +7,6 @@ import lombok.Data;
 @AllArgsConstructor
 public class DispatchVehicle {
     private String vehicleId;
-    private int totalLoad;
-    private double totalDistance;
+    private Double totalLoad;
+    private Double totalDistance;
 }
