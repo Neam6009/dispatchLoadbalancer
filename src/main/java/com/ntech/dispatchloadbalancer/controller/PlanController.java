@@ -2,11 +2,14 @@ package com.ntech.dispatchloadbalancer.controller;
 
 import com.ntech.dispatchloadbalancer.model.DispatchPlan;
 import com.ntech.dispatchloadbalancer.model.DispatchVehicle;
+import com.ntech.dispatchloadbalancer.model.dto.DispatchPlanResponse;
+import com.ntech.dispatchloadbalancer.model.dto.PlanResponse;
 import com.ntech.dispatchloadbalancer.service.DispatchService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @RestController
@@ -20,7 +23,7 @@ public class PlanController {
     }
 
     @GetMapping
-    public List<DispatchPlan> dispatchPlan(){
+    public PlanResponse dispatchPlan(){
         return dispatchService.getDispatchPlan();
     }
 }

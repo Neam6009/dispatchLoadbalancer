@@ -4,6 +4,8 @@ import com.ntech.dispatchloadbalancer.model.DispatchPlan;
 import com.ntech.dispatchloadbalancer.model.DispatchVehicle;
 import com.ntech.dispatchloadbalancer.model.Order;
 import com.ntech.dispatchloadbalancer.model.Vehicle;
+import com.ntech.dispatchloadbalancer.model.dto.DispatchPlanResponse;
+import com.ntech.dispatchloadbalancer.model.dto.PlanResponse;
 import lombok.extern.java.Log;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -14,7 +16,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Collectors;
 
-@Slf4j
 @Service
 public class DispatchService {
 
@@ -45,13 +46,13 @@ public class DispatchService {
         return EARTH_RADIUS * c;
     }
 
-    public List<DispatchPlan> getDispatchPlan() {
+    public PlanResponse getDispatchPlan() {
         List<Order> orders = orderService.getAllOrders();
         List<Vehicle> vehicles = vehicleService.getAllVehicles();
         orders.sort(Comparator.comparing(Order::getPriority).reversed());
         Map<String,Vehicle> vehicleStateMap = vehicles.stream().collect(Collectors.toConcurrentMap(Vehicle::getVehicleId, vehicle->vehicle));
         HashMap<String,DispatchPlan> dispatchPlanMap = new HashMap<>();
-
+        List<Order> unassignedOrders = new ArrayList<>();
         orders.forEach(order -> {
             Optional<Vehicle> vehicle_with_minimum_distance = vehicleStateMap.values().parallelStream()
                     .filter(vehicle -> vehicle.getCapacity() >= order.getPackageWeight())
@@ -75,10 +76,13 @@ public class DispatchService {
                 DispatchVehicle dispatchVehicle = plan.getVehicle();
                 dispatchVehicle.setTotalDistance(dispatchVehicle.getTotalDistance()+minimumDistance);
                 dispatchVehicle.setTotalLoad(dispatchVehicle.getTotalLoad() + order.getPackageWeight());
+            }else{
+                unassignedOrders.add(order);
             }
         });
-
-        return new ArrayList<>(dispatchPlanMap.values());
+        List<DispatchPlan> dispatchPlan = new ArrayList<>(dispatchPlanMap.values());
+        List<DispatchPlanResponse> dispatchPlanResponseList = dispatchPlan.stream().map(DispatchPlanResponse::getResponse).toList();
+        return new PlanResponse(dispatchPlanResponseList,unassignedOrders);
     }
 
 }
