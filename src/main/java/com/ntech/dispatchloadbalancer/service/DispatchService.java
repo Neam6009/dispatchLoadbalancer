@@ -29,7 +29,7 @@ public class DispatchService {
         this.vehicleService = vehicleService;
     }
 
-    Double haversine(Double val){
+    private Double haversine(Double val){
         return Math.pow(Math.sin(val/2),2);
     }
 
